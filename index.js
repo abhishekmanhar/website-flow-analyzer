@@ -20,35 +20,57 @@ async function crawl(url, depth = 2, base = null, flow = {}) {
 
   try {
     const browser = await puppeteer.launch({
-      headless: true,
-      args: ["--no-sandbox", "--disable-setuid-sandbox"]
+      headless: "new",
+      args: [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-blink-features=AutomationControlled",
+      ],
     });
 
     const page = await browser.newPage();
+
+    await page.setUserAgent(
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+      "(KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36"
+    );
+
+    await page.setJavaScriptEnabled(true);
+
     await page.goto(url, {
       waitUntil: "networkidle2",
-      timeout: 30000
+      timeout: 30000,
     });
 
-    const links = await page.$$eval("a", (as) =>
-      as
-        .map((a) => a.href)
-        .filter((href) => href && href.startsWith("http"))
-    );
+    await page.waitForSelector("body", { timeout: 15000 });
+
+    const links = await page.evaluate(() => {
+      const anchors = Array.from(document.querySelectorAll("a"));
+      const hrefs = anchors
+        .map((a) => a.getAttribute("href"))
+        .filter((href) => href && !href.startsWith("#") && !href.startsWith("javascript:"));
+
+      const absoluteLinks = hrefs.map((href) => {
+        try {
+          return new URL(href, window.location.href).href;
+        } catch {
+          return null;
+        }
+      }).filter(Boolean);
+
+      return Array.from(new Set(absoluteLinks));
+    });
 
     await browser.close();
 
-    const filteredLinks = Array.from(new Set(links)).filter((href) =>
-      href.startsWith(baseUrl)
-    );
-
+    const filteredLinks = links.filter((href) => href.startsWith(baseUrl));
     flow[url] = filteredLinks;
 
     for (const link of filteredLinks) {
       await crawl(link, depth - 1, baseUrl, flow);
     }
   } catch (err) {
-    console.error(`Error crawling ${url}:`, err.message);
+    console.error(`❌ Error crawling ${url}:`, err.message);
   }
 
   return flow;
@@ -60,7 +82,7 @@ app.post("/analyze", async (req, res) => {
 
   if (!url || !url.startsWith("http")) {
     return res.status(400).json({
-      error: "A valid URL is required (must start with http or https)"
+      error: "A valid URL is required (must start with http or https)",
     });
   }
 
@@ -69,7 +91,7 @@ app.post("/analyze", async (req, res) => {
     res.json({
       url,
       pages: Object.keys(flow).length,
-      flow
+      flow,
     });
   } catch (error) {
     res.status(500).json({ error: error.message || "Unknown error" });

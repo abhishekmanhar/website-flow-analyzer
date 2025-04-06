@@ -1,6 +1,5 @@
 const express = require("express");
-const axios = require("axios");
-const cheerio = require("cheerio");
+const puppeteer = require("puppeteer");
 const cors = require("cors");
 const { URL } = require("url");
 
@@ -16,31 +15,40 @@ async function crawl(url, depth = 2, base = null, flow = {}) {
   if (depth === 0 || visited.has(url)) return;
   visited.add(url);
 
+  const baseUrl = base || new URL(url).origin;
+  flow[url] = [];
+
   try {
-    const response = await axios.get(url);
-    const $ = cheerio.load(response.data);
-    const baseUrl = base || new URL(url).origin;
-
-    const links = new Set();
-    $("a").each((_, el) => {
-      const href = $(el).attr("href");
-      if (!href) return;
-
-      try {
-        const absoluteUrl = new URL(href, url).href;
-        if (absoluteUrl.startsWith(baseUrl)) {
-          links.add(absoluteUrl);
-        }
-      } catch (err) {}
+    const browser = await puppeteer.launch({
+      headless: true,
+      args: ["--no-sandbox", "--disable-setuid-sandbox"]
     });
 
-    flow[url] = Array.from(links);
+    const page = await browser.newPage();
+    await page.goto(url, {
+      waitUntil: "networkidle2",
+      timeout: 30000
+    });
 
-    for (const link of links) {
+    const links = await page.$$eval("a", (as) =>
+      as
+        .map((a) => a.href)
+        .filter((href) => href && href.startsWith("http"))
+    );
+
+    await browser.close();
+
+    const filteredLinks = Array.from(new Set(links)).filter((href) =>
+      href.startsWith(baseUrl)
+    );
+
+    flow[url] = filteredLinks;
+
+    for (const link of filteredLinks) {
       await crawl(link, depth - 1, baseUrl, flow);
     }
   } catch (err) {
-    console.error(`Error fetching ${url}:`, err.message);
+    console.error(`Error crawling ${url}:`, err.message);
   }
 
   return flow;
@@ -51,7 +59,9 @@ app.post("/analyze", async (req, res) => {
   const { url } = req.body;
 
   if (!url || !url.startsWith("http")) {
-    return res.status(400).json({ error: "A valid URL is required (must start with http or https)" });
+    return res.status(400).json({
+      error: "A valid URL is required (must start with http or https)"
+    });
   }
 
   try {

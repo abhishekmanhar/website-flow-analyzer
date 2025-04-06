@@ -18,7 +18,7 @@ app.post('/analyze', async (req, res) => {
     const visited = new Set();
     const flow = {};
     const queue = [url];
-    const maxPages = 10; // Adjust for deeper crawling
+    const maxPages = 10;
 
     const browser = await puppeteer.launch({
       headless: "new",

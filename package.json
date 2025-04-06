@@ -2,12 +2,13 @@
   "name": "website-flow-analyzer",
   "version": "1.0.0",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "postinstall": "npx puppeteer browsers install chrome"
   },
   "dependencies": {
     "cors": "^2.8.5",
     "express": "^4.18.2",
-    "puppeteer": "^19.11.1",
+    "puppeteer": "^24.6.0",
     "website-flow-analyzer": "file:"
   }
 }

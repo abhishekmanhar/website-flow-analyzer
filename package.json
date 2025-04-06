@@ -4,7 +4,8 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "build": "npx puppeteer browsers install chrome"
+    "build": "npx puppeteer browsers install chrome",
+    "postinstall": "puppeteer browsers install chrome"
   },
   "keywords": [],
   "author": "",
@@ -13,6 +14,6 @@
   "dependencies": {
     "cors": "^2.8.5",
     "express": "^5.1.0",
-    "puppeteer": "^22.15.0"
+    "puppeteer": "^24.6.0"
   }
 }

@@ -61,6 +61,6 @@ app.post('/analyze', async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT,'localhost', () => {
+app.listen(PORT,  () => {
   console.log(`🚀 Server running at http://localhost:${PORT}`);
 });

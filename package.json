@@ -1,20 +1,14 @@
 {
-  "name": "website-analyzer-api",
+  "name": "website-flow-analyzer",
   "version": "1.0.0",
-  "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node index.js",
+    "postinstall": "npx puppeteer browsers install chrome"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
   "dependencies": {
-    "axios": "^1.8.4",
-    "cheerio": "^1.0.0",
     "cors": "^2.8.5",
-    "express": "^5.1.0",
-    "puppeteer": "^24.6.0",
-    "website-analyzer-api": "file:"
-  },
-  "description": ""
+    "express": "^4.18.2",
+    "puppeteer": "^21.3.8",
+    "website-flow-analyzer": "file:"
+  }
 }

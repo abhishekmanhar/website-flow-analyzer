@@ -4,104 +4,78 @@ const cors = require("cors");
 const { URL } = require("url");
 
 const app = express();
-const PORT = process.env.PORT || 3000;
-
 app.use(cors());
 app.use(express.json());
 
-const visited = new Set();
+const MAX_PAGES = 10;
+const TIMEOUT = 10000;
 
-async function crawl(url, depth = 2, base = null, flow = {}) {
-  if (depth === 0 || visited.has(url)) return;
-  visited.add(url);
+async function crawl(startUrl) {
+  const visited = new Set();
+  const flow = {};
+  const queue = [startUrl];
+  const domain = new URL(startUrl).hostname;
 
-  const baseUrl = base || new URL(url).origin;
-  flow[url] = [];
+  const browser = await puppeteer.launch({
+    headless: "new", // Use the new headless mode
+    args: ["--no-sandbox", "--disable-setuid-sandbox"]
+  });
+  
 
-  try {
-    const browser = await puppeteer.launch({
-      headless: "new",
-      args: [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
-        "--disable-blink-features=AutomationControlled",
-      ],
-    });
+  const page = await browser.newPage();
+  await page.setUserAgent("Mozilla/5.0 (X11; Linux x86_64)");
 
-    const page = await browser.newPage();
+  while (queue.length > 0 && visited.size < MAX_PAGES) {
+    const currentUrl = queue.shift();
+    if (visited.has(currentUrl)) continue;
 
-    await page.setUserAgent(
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
-      "(KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36"
-    );
+    visited.add(currentUrl);
+    flow[currentUrl] = [];
 
-    await page.setJavaScriptEnabled(true);
+    try {
+      await page.goto(currentUrl, { timeout: TIMEOUT, waitUntil: "domcontentloaded" });
 
-    await page.goto(url, {
-      waitUntil: "networkidle2",
-      timeout: 30000,
-    });
+      const links = await page.$$eval("a", anchors =>
+        anchors.map(a => a.href).filter(h => h.startsWith("http"))
+      );
 
-    await page.waitForSelector("body", { timeout: 15000 });
+      const internalLinks = links.filter(h => {
+        const linkHost = new URL(h).hostname;
+        return linkHost === domain;
+      });
 
-    const links = await page.evaluate(() => {
-      const anchors = Array.from(document.querySelectorAll("a"));
-      const hrefs = anchors
-        .map((a) => a.getAttribute("href"))
-        .filter((href) => href && !href.startsWith("#") && !href.startsWith("javascript:"));
-
-      const absoluteLinks = hrefs.map((href) => {
-        try {
-          return new URL(href, window.location.href).href;
-        } catch {
-          return null;
-        }
-      }).filter(Boolean);
-
-      return Array.from(new Set(absoluteLinks));
-    });
-
-    await browser.close();
-
-    const filteredLinks = links.filter((href) => href.startsWith(baseUrl));
-    flow[url] = filteredLinks;
-
-    for (const link of filteredLinks) {
-      await crawl(link, depth - 1, baseUrl, flow);
+      for (let link of internalLinks.slice(0, 5)) {
+        if (!visited.has(link) && !queue.includes(link)) queue.push(link);
+        flow[currentUrl].push(link);
+      }
+    } catch (err) {
+      console.error(`Failed to crawl ${currentUrl}:`, err.message);
     }
-  } catch (err) {
-    console.error(`❌ Error crawling ${url}:`, err.message);
   }
 
+  await browser.close();
   return flow;
 }
 
 app.post("/analyze", async (req, res) => {
-  visited.clear();
   const { url } = req.body;
 
-  if (!url || !url.startsWith("http")) {
-    return res.status(400).json({
-      error: "A valid URL is required (must start with http or https)",
-    });
-  }
+  if (!url) return res.status(400).json({ error: "URL is required" });
 
   try {
-    const flow = await crawl(url, 2);
+    const flow = await crawl(url);
     res.json({
       url,
       pages: Object.keys(flow).length,
-      flow,
+      flow
     });
   } catch (error) {
-    res.status(500).json({ error: error.message || "Unknown error" });
+    console.error("Error:", error.message);
+    res.status(500).json({ error: "Something went wrong" });
   }
 });
 
-app.get("/", (req, res) => {
-  res.send("🌐 Website Flow Analyzer API is running!");
-});
-
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
+  console.log(`🚀 Server running at http://localhost:${PORT}`);
 });

@@ -1,4 +1,4 @@
-# 🌐 Website Flow Analyzer
+# 🌐 Website Flow Analyzer API
 
 A lightweight API built with Node.js, Express, and Puppeteer to crawl and analyze the internal navigation flow of a given website.
 
